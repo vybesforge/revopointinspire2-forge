@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inspire 2 — scanner console</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#141a26;--line:#232c3d;--txt:#cbd5e1;--dim:#7d8aa0;--acc:#f97316;--ok:#34d399;--bad:#f87171}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--txt)}
+  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:16px;margin:0;letter-spacing:.3px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+  .dot.on{background:var(--ok)}
+  main{max-width:980px;margin:0 auto;padding:20px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+  button{background:#1a2233;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--acc)}
+  button:disabled{opacity:.45;cursor:default}
+  input[type=number]{width:70px;background:#0b0e14;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px}
+  label{color:var(--dim);font-size:12px}
+  .imgwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:14px 0}
+  .imgwrap img{max-width:100%;height:auto;display:block;border-radius:8px;background:#000}
+  .imgwrap.empty{color:var(--dim);text-align:center;padding:40px}
+  pre{background:#0b0e14;border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;max-height:300px;font-size:12px;white-space:pre-wrap}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .statusline{font-size:13px;color:var(--dim);margin:6px 0}
+  .statusline b{color:var(--txt)}
+  .badge{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--line);margin-left:6px}
+  .badge.ok{background:#123029;color:var(--ok)}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>Inspire 2 · scanner console</h1>
+  <span class="badge" id="deg">—</span>
+</header>
+<main>
+  <div class="controls">
+    <button id="bS">Status</button>
+    <button id="bV">Live view</button>
+    <button id="bScan">Scan</button>
+    <label>sec <input type="number" id="sec" value="8" min="1" max="60"></label>
+    <button id="bM">Mesh → STL</button>
+    <a id="dl" href="/latest.stl" download="scan.stl" hidden><button type="button">Download STL</button></a>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="imgwrap" id="stage">
+        <img id="view" src="/view.png" alt="depth view" onerror="this.closest('.imgwrap').classList.add('empty');this.style.display='none'">
+      </div>
+      <div class="statusline" id="sl"></div>
+    </div>
+    <div>
+      <pre id="log">Ready.</pre>
+    </div>
+  </div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const log=document.getElementById('log');
+function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(r=>r.json())}
+function put(t){log.textContent=(log.textContent+'\n'+t).trim().slice(-4000)}
+async function run(label,fn){$('#bS').disabled=$('#bV').disabled=$('#bScan').disabled=$('#bM').disabled=true;put('> '+label);try{return await fn()}finally{$('#bS').disabled=$('#bV').disabled=$('#bScan').disabled=$('#bM').disabled=false}}
+async function status(){
+  const s=await (await fetch('/status')).json();
+  $('#dot').classList.toggle('on',!!s.scanner);
+  $('#deg').textContent=s.scanner?('depth '+s.depth+' · '+s.hid):'scanner offline';
+  $('#sl').textContent=s.scanner?('depth node '+s.depth+' · hid '+s.hid):'no scanner';
+}
+$('#bS').onclick=()=>status();
+$('#bV').onclick=()=>run('view',async()=>{
+  const r=await post('/view');
+  if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/view.png?'+Date.now();put('view updated')}else put('view failed')
+});
+$('#bScan').onclick=()=>run('scan',async()=>{
+  const r=await post('/scan',{sec:+$('#sec').value});
+  put('scan -> '+ (r.dir||'')+' ('+(r.frames||0)+' frames)');
+  if(r.log)put(r.log.slice(-900)); if(r.ok)put('scan OK')else put('scan FAILED')
+});
+$('#bM').onclick=()=>run('mesh',async()=>{
+  const r=await post('/mesh',{dir:window._lastDir});
+  if(r.log)put(r.log.slice(-900));
+  if(r.ok){$('#dl').hidden=false;put('STL at '+r.stl)}else put('mesh FAILED')
+});
+status();
+</script>
+</body>
+</html>
