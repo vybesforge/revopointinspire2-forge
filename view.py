@@ -66,11 +66,12 @@ def main():
         dv = depth[valid]
         lo, hi = np.percentile(dv, 5), np.percentile(dv, 95)
         norm = np.clip((dv - lo) / max(hi - lo, 1e-6), 0, 1)
-        # viridis-ish: near = warm (object close), far = blue
-        r = np.clip(2 * norm, 0, 1)[..., None]
-        g = np.clip(2 * norm - 1, 0, 1)[..., None]
-        b = np.clip(1 - 2 * np.abs(norm - 0.5), 0, 1)[..., None]
-        col = np.concatenate([255 * r, 255 * g, 255 * b], axis=-1).astype("u1")
+        # heat-style: nearest = bright orange, mid = yellow, far = blue.
+        # never black on a valid pixel - that's how the mug "went black".
+        r = 255.0
+        g = np.clip(2 * norm, 0, 1) * 255.0
+        b = np.clip(1 - norm, 0, 1) * 255.0
+        col = np.stack([r, g, b], axis=-1).astype("u1")
         img[valid] = col
 
     # center crosshair (drawn over everything)
