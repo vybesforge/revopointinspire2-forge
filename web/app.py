@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """INSPIRE2 web front end (clean-room, Apache 2.0).
 
-Minimal HTTP backend driving the clean-room scanner tools over the browser:
+HTTP backend driving the clean-room scanner tools over the browser:
   GET  /              -> single-file SPA (index.html)
   GET  /status        -> scanner nodes + armed state
   POST /view          -> capture a fresh depth view -> /view.png
   POST /depth {exp,gain} -> tune depth exposure(0x910)/gain(0x911)
+  POST /laser {on}    -> IR/laser projector engine (0x912)
   POST /scan {sec}    -> arm + capture N seconds -> report frame count
   POST /mesh {dir}    -> depth dir -> STL -> /latest.stl
   GET  /view.png      -> the latest centering view
@@ -210,6 +211,10 @@ class H(http.server.BaseHTTPRequestHandler):
             if gain is not None:
                 set_depth_reg("0x911", int(gain))
             self._json({"ok": True, "exposure": exp, "gain": gain})
+        elif p == "/laser":
+            on = bool(d.get("on", True))
+            set_depth_reg("0x912", 1 if on else 0)
+            self._json({"ok": True, "laser": on})
         elif p == "/scan":
             sec = float(d.get("sec", 8))
             tag = f"scan_{int(time.time())}"

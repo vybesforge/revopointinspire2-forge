@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Inspire 2 — scanner console</title>
+<title>Inspire 2 — Scanner Console</title>
 <style>
   :root{--bg:#0b0e14;--panel:#141a26;--line:#232c3d;--txt:#cbd5e1;--dim:#7d8aa0;--acc:#f97316;--ok:#34d399;--bad:#f87171}
   *{box-sizing:border-box}
@@ -12,109 +12,185 @@
   header h1{font-size:16px;margin:0;letter-spacing:.3px}
   .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
   .dot.on{background:var(--ok)}
-  main{max-width:980px;margin:0 auto;padding:20px}
-  .controls{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+  main{max-width:1000px;margin:0 auto;padding:20px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+  .panel h2{font-size:13px;margin:0 0 10px;color:var(--acc);text-transform:uppercase;letter-spacing:.5px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   button{background:#1a2233;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:9px 14px;cursor:pointer;font-size:13px}
   button:hover{border-color:var(--acc)}
   button:disabled{opacity:.45;cursor:default}
   input[type=number]{width:70px;background:#0b0e14;border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px}
-  label{color:var(--dim);font-size:12px}
-  .imgwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:14px 0}
-  .imgwrap img{max-width:100%;height:auto;display:block;border-radius:8px;background:#000}
-  .imgwrap.empty{color:var(--dim);text-align:center;padding:40px}
-  pre{background:#0b0e14;border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;max-height:300px;font-size:12px;white-space:pre-wrap}
+  input[type=range]{width:150px;accent-color:var(--acc)}
+  label{color:var(--dim);font-size:12px;display:inline-flex;align-items:center;gap:6px}
+  .imgwrap{background:#000;border:1px solid var(--line);border-radius:12px;padding:8px;margin:12px 0;min-height:300px;display:flex;align-items:center;justify-content:center}
+  .imgwrap img{max-width:100%;max-height:520px;height:auto;display:block;border-radius:8px}
+  .imgwrap.empty{color:var(--dim);text-align:center}
+  pre{background:#0b0e14;border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;max-height:220px;font-size:12px;white-space:pre-wrap}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:760px){.grid{grid-template-columns:1fr}}
   .statusline{font-size:13px;color:var(--dim);margin:6px 0}
   .statusline b{color:var(--txt)}
   .badge{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--line);margin-left:6px}
   .badge.ok{background:#123029;color:var(--ok)}
+  .cmd{font-family:monospace;font-size:12px;color:#93c5fd;background:#0b0e14;border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+  .cmdrow{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid #1a2233;font-size:12px}
+  .cmdrow:last-child{border-bottom:none}
+  .cmdrow .d{color:var(--dim)}
 </style>
 </head>
 <body>
 <header>
   <span class="dot" id="dot"></span>
-  <h1>Inspire 2 · scanner console</h1>
+  <h1>Inspire 2 · Scanner Console</h1>
   <span class="badge" id="deg">—</span>
 </header>
 <main>
-  <div class="controls">
+
+  <div class="panel">
+    <h2>Capture</h2>
+    <div class="controls">
       <button id="bS">Status</button>
-      <button id="bV" title="depth">Depth view</button>
-      <button id="bC" title="color camera">Color view</button>
-      <label title="auto-refresh depth every 5s"><input type="checkbox" id="auto"> Auto 5s</label>
+      <button id="bV">Take Depth Image</button>
+      <button id="bC">Take Color Image</button>
+      <label title="auto-capture depth every 5s"><input type="checkbox" id="auto"> Auto 5s</label>
+    </div>
+    <div class="statusline" id="feed">no image yet</div>
+  </div>
+
+  <div class="panel">
+    <h2>Scan &amp; Print</h2>
+    <div class="controls">
       <button id="bScan">Scan</button>
-      <label>sec <input type="number" id="sec" value="8" min="1" max="60"></label>
+      <label>seconds <input type="number" id="sec" value="8" min="1" max="60"></label>
       <button id="bM">Mesh → STL</button>
       <a id="dl" href="/latest.stl" download="scan.stl" hidden><button type="button">Download STL</button></a>
     </div>
-    <div class="controls" id="tune">
-      <label>depth exposure <input type="range" id="exp" min="1000" max="30000" step="500" value="7000"></label>
-      <label>depth gain <input type="range" id="gain" min="500" max="20000" step="500" value="5000"></label>
-      <button id="bT">Apply depth tune</button>
+  </div>
+
+  <div class="panel">
+    <h2>Depth Tuning</h2>
+    <div class="controls">
+      <label>exposure <input type="range" id="exp" min="1000" max="30000" step="500" value="7000"></label>
+      <label>gain <input type="range" id="gain" min="500" max="20000" step="500" value="5000"></label>
+      <button id="bT">Apply Depth Tune</button>
+      <label title="IR/laser projector engine"><input type="checkbox" id="laser" checked> Laser/IR on</label>
+      <button id="bL">Apply Laser</button>
     </div>
-  <div class="statusline" id="feed">depth view</div>
+  </div>
+
+  <div class="imgwrap" id="stage">
+    <img id="view" alt="scanner view" style="display:none">
+    <span id="ph">No image yet — press a capture button.</span>
+  </div>
 
   <div class="grid">
-    <div>
-      <div class="imgwrap" id="stage">
-        <img id="view" src="/view.png" alt="depth view" onerror="this.closest('.imgwrap').classList.add('empty');this.style.display='none'">
-      </div>
-      <div class="statusline" id="sl"></div>
-    </div>
-    <div>
+    <div class="panel">
+      <h2>Log</h2>
       <pre id="log">Ready.</pre>
+    </div>
+    <div class="panel">
+      <h2>Command Reference</h2>
+      <div class="cmdrow"><span><span class="cmd">POST /view</span> — capture depth image</span><span class="d">Depth view</span></div>
+      <div class="cmdrow"><span><span class="cmd">POST /color</span> — capture RGB (drops USB ~30s)</span><span class="d">Color view</span></div>
+      <div class="cmdrow"><span><span class="cmd">POST /depth</span> {exposure,gain} — write 0x910/0x911</span><span class="d">Depth tune</span></div>
+      <div class="cmdrow"><span><span class="cmd">POST /laser</span> {on} — IR projector 0x912</span><span class="d">Laser toggle</span></div>
+      <div class="cmdrow"><span><span class="cmd">POST /scan</span> {sec} — arm + capture frames</span><span class="d">Scan</span></div>
+      <div class="cmdrow"><span><span class="cmd">POST /mesh</span> {dir} — depth → STL</span><span class="d">Mesh</span></div>
+      <div class="cmdrow"><span><span class="cmd">GET /view.png</span> — latest depth image</span><span class="d">Image</span></div>
+      <div class="cmdrow"><span><span class="cmd">GET /latest.stl</span> — latest mesh</span><span class="d">STL</span></div>
     </div>
   </div>
 </main>
 
 <script>
-const $=s=>document.querySelector(s);
-const log=document.getElementById('log');
-function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(r=>r.json())}
-function put(t){log.textContent=(log.textContent+'\n'+t).trim().slice(-4000)}
-async function run(label,fn){$('#bS').disabled=$('#bV').disabled=$('#bC').disabled=$('#bScan').disabled=$('#bM').disabled=true;put('> '+label);try{return await fn()}finally{$('#bS').disabled=$('#bV').disabled=$('#bC').disabled=$('#bScan').disabled=$('#bM').disabled=false}}
-async function status(){
-  const s=await (await fetch('/status')).json();
-  $('#dot').classList.toggle('on',!!s.scanner);
-  $('#deg').textContent=s.scanner?('depth '+s.depth+' · '+s.hid):'scanner offline';
-  $('#sl').textContent=s.scanner?('depth node '+s.depth+' · hid '+s.hid):'no scanner';
+const $ = s => document.querySelector(s);
+const log = document.getElementById('log');
+const img = document.getElementById('view');
+const ph = document.getElementById('ph');
+
+function post(url, body) {
+  return fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {})
+  }).then(r => r.json());
 }
-$('#bS').onclick=()=>status();
-$('#bV').onclick=()=>run('depth view',async()=>{
-  const r=await post('/view');
-  if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/view.png?'+Date.now();$('#feed').textContent='depth view';put('depth view updated')}else put('depth view failed')
-});
-$('#bC').onclick=()=>run('color view',async()=>{
-  const r=await post('/color');
-  if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/color.png?'+Date.now();$('#feed').textContent='color camera (RGB)';put('color view updated: '+(r.msg||''))}else put('color view failed: '+r.msg)
-});
-$('#bScan').onclick=()=>run('scan',async()=>{
-  const r=await post('/scan',{sec:+$('#sec').value});
-  put('scan -> '+ (r.dir||'')+' ('+(r.frames||0)+' frames)');
-  if(r.log)put(r.log.slice(-900)); if(r.ok)put('scan OK')else put('scan FAILED')
-});
-$('#bM').onclick=()=>run('mesh',async()=>{
-  const r=await post('/mesh',{dir:window._lastDir});
-  if(r.log)put(r.log.slice(-900));
-  if(r.ok){$('#dl').hidden=false;put('STL at '+r.stl)}else put('mesh FAILED')
-});
-$('#bT').onclick=()=>run('depth tune',async()=>{
-  const r=await post('/depth',{exposure:+$('#exp').value,gain:+$('#gain').value});
-  put('depth exp='+r.exposure+' gain='+r.gain);
-  // refresh view to see the effect
-  const v=await post('/view');
-  if(v.ok){const i=$('#view');i.src='/view.png?'+Date.now()}
-});
-// auto-refresh depth every 5s
-async function refreshView(){
-  if(!$('#auto').checked)return;
-  try{
-    const r=await post('/view');
-    if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/view.png?'+Date.now()}
-  }catch(e){}
+function put(t) {
+  log.textContent = (log.textContent + '\n' + t).trim().slice(-4000);
 }
-setInterval(refreshView,5000);
+function showImage(url) {
+  img.src = url + '?' + Date.now();
+  img.style.display = 'block';
+  ph.style.display = 'none';
+  document.getElementById('stage').classList.remove('empty');
+}
+async function run(label, fn) {
+  const btns = ['bS','bV','bC','bScan','bM','bT','bL'];
+  btns.forEach(b => { const el = $('#'+b); if (el) el.disabled = true; });
+  put('> ' + label);
+  try { return await fn(); }
+  finally { btns.forEach(b => { const el = $('#'+b); if (el) el.disabled = false; }); }
+}
+
+async function status() {
+  try {
+    const s = await (await fetch('/status')).json();
+    document.getElementById('dot').classList.toggle('on', !!s.scanner);
+    document.getElementById('deg').textContent = s.scanner ? ('depth ' + s.depth + ' · ' + s.hid) : 'scanner offline';
+  } catch (e) { put('status error: ' + e); }
+}
+
+$('#bS').onclick = () => run('status', status);
+
+$('#bV').onclick = () => run('take depth image', async () => {
+  const r = await post('/view');
+  if (r.ok) { showImage('/view.png'); document.getElementById('feed').textContent = 'depth view'; put('depth image captured'); }
+  else { put('depth view failed'); }
+});
+
+$('#bC').onclick = () => run('take color image', async () => {
+  const r = await post('/color');
+  if (r.ok) { showImage('/color.png'); document.getElementById('feed').textContent = 'color camera (RGB)'; put('color image captured'); }
+  else { put('color view failed: ' + (r.msg || '')); }
+});
+
+$('#bScan').onclick = () => run('scan', async () => {
+  const r = await post('/scan', {sec: +$('#sec').value});
+  put('scan -> ' + (r.dir || '') + ' (' + (r.frames || 0) + ' frames)');
+  if (r.log) put(r.log.slice(-900));
+  if (r.ok) { put('scan OK'); window._lastDir = r.dir; }
+  else { put('scan FAILED'); }
+});
+
+$('#bM').onclick = () => run('mesh', async () => {
+  const r = await post('/mesh', {dir: window._lastDir});
+  if (r.log) put(r.log.slice(-900));
+  if (r.ok) { document.getElementById('dl').hidden = false; put('STL at ' + r.stl); }
+  else { put('mesh FAILED'); }
+});
+
+$('#bT').onclick = () => run('depth tune', async () => {
+  const r = await post('/depth', {exposure: +$('#exp').value, gain: +$('#gain').value});
+  put('depth exp=' + r.exposure + ' gain=' + r.gain);
+  const v = await post('/view');
+  if (v.ok) { showImage('/view.png'); }
+});
+
+$('#bL').onclick = () => run('laser', async () => {
+  const on = $('#laser').checked;
+  const r = await post('/laser', {on: on});
+  put('laser/IR ' + (r.laser ? 'ON' : 'OFF'));
+});
+
+async function refreshView() {
+  if (!$('#auto').checked) return;
+  try {
+    const r = await post('/view');
+    if (r.ok) { showImage('/view.png'); }
+  } catch (e) {}
+}
+setInterval(refreshView, 5000);
+
 status();
 </script>
 </body>
