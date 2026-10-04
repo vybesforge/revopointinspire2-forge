@@ -13,7 +13,7 @@ Minimal HTTP backend driving the clean-room scanner tools over the browser:
 
 LAN-facing (binds 0.0.0.0). Driver + venv paths below.
 """
-import json, os, subprocess, sys, time
+import json, os, subprocess, sys, time, struct
 
 import http.server
 
@@ -25,8 +25,88 @@ os.makedirs(SCANS, exist_ok=True)
 os.makedirs(RUNS, exist_ok=True)
 
 VIEW_PNG = os.path.join(RUNS, "view.png")
+COLOR_PNG = os.path.join(RUNS, "color.png")
 LATEST_STL = os.path.join(RUNS, "latest.stl")
 CURRENT_DIR = ""
+
+
+def _hid():
+    for h in os.listdir("/dev"):
+        if h.startswith("hidraw"):
+            try:
+                u = open(f"/sys/class/hidraw/{h}/device/uevent").read()
+                if "REVO_PRODUCT" in u:
+                    return f"/dev/{h}"
+            except Exception:
+                pass
+    return None
+
+
+def set_depth(on: bool):
+    """Arm (1) or de-arm (0) the depth engine via the HID control node."""
+    hid = _hid()
+    if not hid:
+        return False
+    cmd = b"echo s 0x481 %d >/dev/null rk_preisp" % (1 if on else 0)
+    hdr = b"ZZZZ" + b"\x01\x01\x00\x10" + b"\x00" * 32 + struct.pack("<I", len(cmd))
+    import fcntl
+    with open(hid, "wb") as f:
+        f.write((hdr + cmd + b"\x00" * 1024)[:1024])
+        f.flush()
+    time.sleep(2.5)      # device re-enumerates: give it time to settle
+    return True
+
+
+def find_rgb():
+    for v in sorted(os.listdir("/sys/class/video4linux")):
+        try:
+            nm = open(f"/sys/class/video4linux/{v}/name").read().strip()
+            if "REVO" in nm and "RGB" in nm:
+                return f"/dev/{v}"
+        except Exception:
+            pass
+    return None
+
+
+def capture_color():
+    """de-arm depth, grab one RGB MJPG frame, light-de-purple, save PNG."""
+    set_depth(False)
+    time.sleep(1.0)
+    jpg = os.path.join(RUNS, "color_raw.jpg")
+    last = ""
+    for attempt in range(3):
+        node = find_rgb()
+        if not node:
+            last = "no RGB node yet (re-enum)"
+            time.sleep(2.0)
+            continue
+        if os.path.exists(jpg):
+            os.remove(jpg)
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                            "-f", "v4l2", "-input_format", "mjpeg",
+                            "-video_size", "1280x800", "-i", node,
+                            "-frames:v", "1", jpg],
+                           capture_output=True, text=True, timeout=30)
+        if os.path.exists(jpg):
+            break
+        last = (r.stderr or "rgb capture failed")[-300:]
+        time.sleep(2.0)
+    if not os.path.exists(jpg):
+        return False, last
+    # light channel-balance to neutralise the purple cast (keep it mild)
+    try:
+        from PIL import Image
+        import numpy as np
+        im = Image.open(jpg).convert("RGB")
+        a = np.asarray(im, "f4")
+        r_, g_, b_ = a[..., 0].mean(), a[..., 1].mean(), a[..., 2].mean()
+        gnorm = max(g_, 1e-6)
+        a[..., 0] *= min(1.0, gnorm / max(r_, 1e-6) * 1.05)
+        a[..., 2] *= min(1.0, gnorm / max(b_, 1e-6) * 1.05)
+        Image.fromarray(a.astype("u1")).save(COLOR_PNG)
+    except Exception:
+        Image.open(jpg).convert("RGB").save(COLOR_PNG)
+    return True, "ok"
 
 
 def run(*args, cwd=FORGE, timeout=280):
@@ -74,6 +154,8 @@ class H(http.server.BaseHTTPRequestHandler):
             self._status()
         elif p == "/view.png":
             self._send_file(VIEW_PNG, "image/png")
+        elif p == "/color.png":
+            self._send_file(COLOR_PNG, "image/png")
         elif p == "/latest.stl":
             self._send_file(LATEST_STL, "model/stl", dl="scan.stl")
         else:
@@ -109,9 +191,15 @@ class H(http.server.BaseHTTPRequestHandler):
         except Exception:
             d = {}
         global CURRENT_DIR
+        if p in ("/view", "/scan"):
+            set_depth(True)          # ensure depth engine armed first
+            time.sleep(0.4)
         if p == "/view":
             rc, out = run("/opt/inspire2/forge/view.py", "-o", VIEW_PNG)
             self._json({"ok": rc == 0, "relative_url": "/view.png"})
+        elif p == "/color":
+            ok, msg = capture_color()
+            self._json({"ok": ok, "msg": msg, "relative_url": "/color.png"})
         elif p == "/scan":
             sec = float(d.get("sec", 8))
             tag = f"scan_{int(time.time())}"

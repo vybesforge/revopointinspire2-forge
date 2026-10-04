@@ -63,16 +63,27 @@ def main():
 
     img = np.zeros((H, W, 3), "u1")
     if valid.any():
-        dv = depth[valid]
-        lo, hi = np.percentile(dv, 5), np.percentile(dv, 95)
-        norm = np.clip((dv - lo) / max(hi - lo, 1e-6), 0, 1)
+        # window OUT the far background so only the object band shows bright;
+        # sensor dumps high speckle values (up to ~65k) that lit the background.
+        zc = depth[valid]
+        med = np.median(zc)
+        mad = np.median(np.abs(zc - med))
+        hi = med + 4.5 * mad
+        obj = valid & (depth <= hi)
+        dv = depth[obj]
+        if not dv.any():
+            dv = zc
+            obj = valid
+        lo = np.percentile(dv, 2)
+        hi2 = np.percentile(dv, 98)
+        norm = np.clip((dv - lo) / max(hi2 - lo, 1e-6), 0, 1)
         # heat-style: nearest = bright orange, mid = yellow, far = blue.
         # never black on a valid pixel - that's how the mug "went black".
-        r = 255.0
+        r = np.ones_like(norm) * 255.0
         g = np.clip(2 * norm, 0, 1) * 255.0
         b = np.clip(1 - norm, 0, 1) * 255.0
         col = np.stack([r, g, b], axis=-1).astype("u1")
-        img[valid] = col
+        img[obj] = col
 
     # center crosshair (drawn over everything)
     cx, cy = W // 2, H // 2

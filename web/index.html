@@ -40,12 +40,14 @@
 <main>
   <div class="controls">
     <button id="bS">Status</button>
-    <button id="bV">Live view</button>
+    <button id="bV" title="depth">Depth view</button>
+    <button id="bC" title="color camera">Color view</button>
     <button id="bScan">Scan</button>
     <label>sec <input type="number" id="sec" value="8" min="1" max="60"></label>
     <button id="bM">Mesh → STL</button>
     <a id="dl" href="/latest.stl" download="scan.stl" hidden><button type="button">Download STL</button></a>
   </div>
+  <div class="statusline" id="feed">depth view</div>
 
   <div class="grid">
     <div>
@@ -65,7 +67,7 @@ const $=s=>document.querySelector(s);
 const log=document.getElementById('log');
 function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(r=>r.json())}
 function put(t){log.textContent=(log.textContent+'\n'+t).trim().slice(-4000)}
-async function run(label,fn){$('#bS').disabled=$('#bV').disabled=$('#bScan').disabled=$('#bM').disabled=true;put('> '+label);try{return await fn()}finally{$('#bS').disabled=$('#bV').disabled=$('#bScan').disabled=$('#bM').disabled=false}}
+async function run(label,fn){$('#bS').disabled=$('#bV').disabled=$('#bC').disabled=$('#bScan').disabled=$('#bM').disabled=true;put('> '+label);try{return await fn()}finally{$('#bS').disabled=$('#bV').disabled=$('#bC').disabled=$('#bScan').disabled=$('#bM').disabled=false}}
 async function status(){
   const s=await (await fetch('/status')).json();
   $('#dot').classList.toggle('on',!!s.scanner);
@@ -73,9 +75,13 @@ async function status(){
   $('#sl').textContent=s.scanner?('depth node '+s.depth+' · hid '+s.hid):'no scanner';
 }
 $('#bS').onclick=()=>status();
-$('#bV').onclick=()=>run('view',async()=>{
+$('#bV').onclick=()=>run('depth view',async()=>{
   const r=await post('/view');
-  if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/view.png?'+Date.now();put('view updated')}else put('view failed')
+  if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/view.png?'+Date.now();$('#feed').textContent='depth view';put('depth view updated')}else put('depth view failed')
+});
+$('#bC').onclick=()=>run('color view',async()=>{
+  const r=await post('/color');
+  if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/color.png?'+Date.now();$('#feed').textContent='color camera (RGB)';put('color view updated: '+(r.msg||''))}else put('color view failed: '+r.msg)
 });
 $('#bScan').onclick=()=>run('scan',async()=>{
   const r=await post('/scan',{sec:+$('#sec').value});
