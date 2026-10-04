@@ -39,14 +39,20 @@
 </header>
 <main>
   <div class="controls">
-    <button id="bS">Status</button>
-    <button id="bV" title="depth">Depth view</button>
-    <button id="bC" title="color camera">Color view</button>
-    <button id="bScan">Scan</button>
-    <label>sec <input type="number" id="sec" value="8" min="1" max="60"></label>
-    <button id="bM">Mesh → STL</button>
-    <a id="dl" href="/latest.stl" download="scan.stl" hidden><button type="button">Download STL</button></a>
-  </div>
+      <button id="bS">Status</button>
+      <button id="bV" title="depth">Depth view</button>
+      <button id="bC" title="color camera">Color view</button>
+      <label title="auto-refresh depth every 5s"><input type="checkbox" id="auto" checked> Auto 5s</label>
+      <button id="bScan">Scan</button>
+      <label>sec <input type="number" id="sec" value="8" min="1" max="60"></label>
+      <button id="bM">Mesh → STL</button>
+      <a id="dl" href="/latest.stl" download="scan.stl" hidden><button type="button">Download STL</button></a>
+    </div>
+    <div class="controls" id="tune">
+      <label>depth exposure <input type="range" id="exp" min="1000" max="30000" step="500" value="7000"></label>
+      <label>depth gain <input type="range" id="gain" min="500" max="20000" step="500" value="5000"></label>
+      <button id="bT">Apply depth tune</button>
+    </div>
   <div class="statusline" id="feed">depth view</div>
 
   <div class="grid">
@@ -93,6 +99,22 @@ $('#bM').onclick=()=>run('mesh',async()=>{
   if(r.log)put(r.log.slice(-900));
   if(r.ok){$('#dl').hidden=false;put('STL at '+r.stl)}else put('mesh FAILED')
 });
+$('#bT').onclick=()=>run('depth tune',async()=>{
+  const r=await post('/depth',{exposure:+$('#exp').value,gain:+$('#gain').value});
+  put('depth exp='+r.exposure+' gain='+r.gain);
+  // refresh view to see the effect
+  const v=await post('/view');
+  if(v.ok){const i=$('#view');i.src='/view.png?'+Date.now()}
+});
+// auto-refresh depth every 5s
+async function refreshView(){
+  if(!$('#auto').checked)return;
+  try{
+    const r=await post('/view');
+    if(r.ok){$('#stage').classList.remove('empty');const i=$('#view');i.style.display='block';i.src='/view.png?'+Date.now()}
+  }catch(e){}
+}
+setInterval(refreshView,5000);
 status();
 </script>
 </body>

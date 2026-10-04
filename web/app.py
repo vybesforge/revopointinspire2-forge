@@ -5,11 +5,11 @@ Minimal HTTP backend driving the clean-room scanner tools over the browser:
   GET  /              -> single-file SPA (index.html)
   GET  /status        -> scanner nodes + armed state
   POST /view          -> capture a fresh depth view -> /view.png
+  POST /depth {exp,gain} -> tune depth exposure(0x910)/gain(0x911)
   POST /scan {sec}    -> arm + capture N seconds -> report frame count
   POST /mesh {dir}    -> depth dir -> STL -> /latest.stl
   GET  /view.png      -> the latest centering view
   GET  /latest.stl    -> the latest mesh as an STL download
-  GET  /latest.ply    -> the latest registered phi cloud/PLY if present
 
 LAN-facing (binds 0.0.0.0). Driver + venv paths below.
 """
@@ -42,19 +42,29 @@ def _hid():
     return None
 
 
-def set_depth(on: bool):
-    """Arm (1) or de-arm (0) the depth engine via the HID control node."""
+def _hid_write(cmd: bytes):
     hid = _hid()
     if not hid:
         return False
-    cmd = b"echo s 0x481 %d >/dev/null rk_preisp" % (1 if on else 0)
     hdr = b"ZZZZ" + b"\x01\x01\x00\x10" + b"\x00" * 32 + struct.pack("<I", len(cmd))
-    import fcntl
     with open(hid, "wb") as f:
         f.write((hdr + cmd + b"\x00" * 1024)[:1024])
         f.flush()
-    time.sleep(2.5)      # device re-enumerates: give it time to settle
     return True
+
+
+def set_depth(on: bool):
+    """Arm (1) or de-arm (0) the depth engine via the HID control node."""
+    ok = _hid_write(b"echo s 0x481 %d >/dev/null rk_preisp" % (1 if on else 0))
+    time.sleep(2.5)      # device re-enumerates: give it time to settle
+    return ok
+
+
+def set_depth_reg(reg, val):
+    """Write a depth pre-ISP register (e.g. 0x910 exposure, 0x911 gain)."""
+    ok = _hid_write(f"echo s {reg} {val} >/dev/null rk_preisp".encode())
+    time.sleep(0.3)
+    return ok
 
 
 def find_rgb():
@@ -93,7 +103,6 @@ def capture_color():
         time.sleep(2.0)
     if not os.path.exists(jpg):
         return False, last
-    # light channel-balance to neutralise the purple cast (keep it mild)
     try:
         from PIL import Image
         import numpy as np
@@ -114,12 +123,6 @@ def run(*args, cwd=FORGE, timeout=280):
     p = subprocess.run(cmd, capture_output=True, text=True,
                        cwd=cwd, timeout=timeout)
     return p.returncode, (p.stdout + p.stderr).strip()
-
-
-def status():
-    out = {"scanner": False, "depth": None, "hid": None}
-    rc, txt = run("status") if False else (None, None)
-    return out
 
 
 class H(http.server.BaseHTTPRequestHandler):
@@ -166,9 +169,8 @@ class H(http.server.BaseHTTPRequestHandler):
         for n in sorted(os.listdir("/sys/class/video4linux")):
             try:
                 nm = open(f"/sys/class/video4linux/{n}/name").read().strip()
-                if "REVO_PRODUCT" in nm:
-                    if "Dep" in nm and s["depth"] is None:
-                        s["depth"] = f"/dev/{n}"
+                if "REVO_PRODUCT" in nm and "Dep" in nm and s["depth"] is None:
+                    s["depth"] = f"/dev/{n}"
             except Exception:
                 pass
         for h in os.listdir("/dev"):
@@ -200,6 +202,14 @@ class H(http.server.BaseHTTPRequestHandler):
         elif p == "/color":
             ok, msg = capture_color()
             self._json({"ok": ok, "msg": msg, "relative_url": "/color.png"})
+        elif p == "/depth":
+            exp = d.get("exposure")
+            gain = d.get("gain")
+            if exp is not None:
+                set_depth_reg("0x910", int(exp))
+            if gain is not None:
+                set_depth_reg("0x911", int(gain))
+            self._json({"ok": True, "exposure": exp, "gain": gain})
         elif p == "/scan":
             sec = float(d.get("sec", 8))
             tag = f"scan_{int(time.time())}"
