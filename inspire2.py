@@ -39,7 +39,8 @@ def find_hid():
     return None
 
 def find_depth():
-    for v in glob.glob("/dev/video*"):
+    for v in sorted(glob.glob("/dev/video*"),
+                    key=lambda p: int(p.rsplit("video", 1)[-1])):
         try:
             n = open(f"/sys/class/video4linux/{os.path.basename(v)}/name").read().strip()
             if n == DEP_CARD:
@@ -77,7 +78,8 @@ def scan(args):
     os.makedirs(out, exist_ok=True)
     print(f"recording {args.seconds}s depth -> {out}/")
     cmd = ["ffmpeg", "-y", "-f", "v4l2", "-input_format", "y16",
-           "-video_size", "640x512", "-framerate", "15", "-i", dep,
+           "-video_size", "640x512", "-framerate", "15", "-t",
+           str(args.seconds), "-i", dep,
            "-c", "copy", f"{out}/depth_%06d.raw"]
     subprocess.run(cmd)
     n = len(glob.glob(f"{out}/depth_*.raw"))

@@ -22,10 +22,25 @@ and a USBPcap capture of the real control traffic.
 
 ## Usage
 ```
-./inspire2.py scan -s 10 -o ~/scans/mug
+./inspire2.py scan -s 10 -o ~/scans/mug    # arm depth engine + capture Y16 frames
+./mesh.py ~/scans/mug -o mug.stl           # fuse -> point cloud -> STL
 ```
-Arms the depth engine and records depth frames. Requires root to write the
-HID node (or a udev rule).
+`scan` arms the depth engine (register writes to the Rockchip pre-ISP over the
+HID node) and records Y16 depth frames. A udev rule (`99-inspire2.rules`)
+grants the `video` group access to the HID node, so no root is needed.
+
+## Depth -> mesh
+`mesh.py` unprojects valid depth pixels to mm (pinhole model), depth-median-fuses
+multiple frames, triangulates the 2.5D range image, and exports an STL. Runs from
+the project venv: `infer` deps in `.venv` (numpy, trimesh, scipy, networkx).
+
+Calibration is the accuracy step: the scanner's real intrinsics and the
+raw-depth->mm scale ride the network/adb channel (not yet pulled), so
+`--cx/--cy/--fx/--fy/--scale` default to nominal values. Correct them once
+intrinsics are known:
+```
+./mesh.py ~/scans/mug -o mug.stl --fx 600 --fy 598 --scale 4.2
+```
 
 ## Files
 - `inspire2.py` — the driver (find nodes, arm depth, capture).

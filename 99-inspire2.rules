@@ -1,0 +1,4 @@
+# Revopoint INSPIRE 2 scanner (Chishine3d / Rockchip, 2207:110c)
+# Grant the `video` group access to the scanner's HID control node so the
+# clean-room driver can arm the depth engine without root.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2207", ATTRS{idProduct}=="110c", GROUP="video", MODE="0660"
