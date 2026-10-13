@@ -63,13 +63,17 @@ def main():
 
     img = np.zeros((H, W, 3), "u1")
     if valid.any():
-        # window OUT the far background so only the object band shows bright;
-        # sensor dumps high speckle values (up to ~65k) that lit the background.
+        # Keep the object band. Drop the 65k sentinel and the 1px-wide laser
+        # stripes on the backdrop (they have no horizontal neighbor).
         zc = depth[valid]
         med = np.median(zc)
-        mad = np.median(np.abs(zc - med))
-        hi = med + 4.5 * mad
-        obj = valid & (depth <= hi)
+        band = valid & (depth > 80) & (depth < med * 1.45) & (depth > med * 0.55)
+        horiz = np.zeros_like(band)
+        horiz[:, 1:] |= band[:, :-1]
+        horiz[:, :-1] |= band[:, 1:]
+        obj = band & horiz
+        if obj.sum() < 40:
+            obj = band
         dv = depth[obj]
         if not dv.any():
             dv = zc
