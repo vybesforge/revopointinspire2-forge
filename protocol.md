@@ -50,6 +50,21 @@ echo s 0x481 1 >/dev/rk_preisp   # depth ON
   change) — re-find nodes after arming.
 - Depth map is empty when no object is in range.
 
+## Register reality check (Nov 2026)
+Writing any register beyond the exact vendor init sequence breaks the laser.
+Tested both ways — poked into a live stream and baked into a fresh init before
+arming — every extra knob collapsed depth from 8.57% to ~0.06% fill (columns
+630 -> 57): AE mode `0x912`, HDR `0x914`, laser line mode `0xb07`, gain `0x903`,
+exposure `0x911`. The scanner only exposes registers; the auto-exposure /
+option logic lives in the vendor app (RPALaserAutoExposure). `0x914` also
+forces a device re-enumeration.
+
+## Stream layout
+The 640x512 Y16 buffer is mostly padding — real depth data occupies a 640x128
+band, rows 0-117. `1920x512` is the 640x512 frame tiled 3x; `640x1024` is a
+static pattern. Depth values read near-constant across a frame-filling subject,
+i.e. this stream is the *input* to RPALaserRecon, not a finished depth map.
+
 ## Notes
 - The JSON-RPC messages (`queryCameras`, `connect`, `startStream`, ...) ride a
   different channel (network/adb), not the HID. The HID carries the register
